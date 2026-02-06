@@ -1,0 +1,658 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Spatial N-Back (Polished)</title>
+    <style>
+        /* --- GLOBAL & LAYOUT --- */
+        body {
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            margin: 0;
+            height: 100vh; /* Fallback */
+            height: 100dvh; /* Dynamic height for mobile browsers */
+            overflow: hidden; /* Prevent scrolling globally */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .screen {
+            display: none;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+            max-width: 600px; /* Constrain width on desktop */
+            padding: 20px;
+            box-sizing: border-box;
+            text-align: center;
+        }
+
+        .active { display: flex; }
+
+        /* --- START SCREEN STYLES --- */
+        h1 {
+            font-size: 2rem;
+            margin: 0 0 20px 0;
+            color: #2c3e50;
+        }
+
+        .settings-box {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.08);
+            width: 100%;
+            box-sizing: border-box;
+            text-align: left;
+            margin-bottom: 10px;
+        }
+
+        .input-group {
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        label { font-weight: 600; color: #555; font-size: 1rem; }
+        
+        select, input[type="number"] {
+            padding: 10px;
+            font-size: 1rem;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+        }
+
+        /* Centered Start Button */
+        button.start-btn {
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            padding: 16px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            border-radius: 8px;
+            cursor: pointer;
+            width: 100%;
+            max-width: 300px;
+            
+            /* FORCING CENTER ALIGNMENT */
+            display: block;
+            margin: 20px auto 0 auto; 
+            
+            box-shadow: 0 4px 10px rgba(76, 175, 80, 0.3);
+            transition: transform 0.1s, background-color 0.2s;
+        }
+        button.start-btn:active { transform: scale(0.98); }
+
+        .instructions {
+            margin-top: 20px;
+            font-size: 0.9rem;
+            color: #666;
+            background: #e9e9e9;
+            padding: 15px;
+            border-radius: 8px;
+            line-height: 1.5;
+        }
+
+        /* --- GAME SCREEN STYLES --- */
+        #game-header {
+            flex-shrink: 0; /* Never shrink */
+            display: flex;
+            justify-content: space-between;
+            background: #fff;
+            padding: 12px 15px;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 0.9rem;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            margin-bottom: 10px;
+        }
+
+        #progress-container {
+            flex-shrink: 0;
+            width: 100%;
+            background-color: #e0e0e0;
+            height: 6px;
+            border-radius: 3px;
+            overflow: hidden;
+            margin-bottom: 10px;
+        }
+        #progress-bar {
+            height: 100%;
+            width: 100%;
+            background-color: #4CAF50;
+            transform-origin: left;
+        }
+
+        /* This container grows to fill empty space */
+        #stimuli-container {
+            flex-grow: 1; 
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            margin-bottom: 15px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            overflow-y: auto;
+            border: 1px solid #eee;
+        }
+
+        .premise {
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 1.4rem;
+            margin: 10px 0;
+            font-weight: 700;
+            color: #333;
+            text-align: center;
+        }
+
+        /* --- CONTROLS --- */
+        .controls-hint {
+            flex-shrink: 0;
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            color: #888;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
+        }
+        .key-badge {
+            background: #fff;
+            border: 1px solid #ccc;
+            padding: 3px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            color: #555;
+            box-shadow: 0 2px 0 #ddd;
+        }
+
+        /* Mobile Buttons */
+        #mobile-controls {
+            flex-shrink: 0; /* Never collapse */
+            display: none; /* Hidden on Desktop */
+            gap: 12px;
+            width: 100%;
+            padding-bottom: 5px; /* Safety padding */
+        }
+
+        .mob-btn {
+            border: none;
+            padding: 20px 0; /* Taller touch targets */
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 800;
+            color: white;
+            cursor: pointer;
+            box-shadow: 0 4px 0 rgba(0,0,0,0.15);
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .mob-btn:active {
+            transform: translateY(4px);
+            box-shadow: 0 0 0 rgba(0,0,0,0.15);
+        }
+
+        .btn-match { background-color: #2196F3; flex: 2; } 
+        .btn-pass { background-color: #FF9800; flex: 2; }
+        .btn-quit { background-color: #ef5350; flex: 1; font-size: 0.9rem; }
+
+        /* --- END SCREEN --- */
+        #end-screen .settings-box {
+            text-align: center;
+        }
+        .stat-box {
+            font-size: 1.2rem;
+            margin: 12px 0;
+            display: flex;
+            justify-content: space-between;
+            font-weight: bold;
+        }
+
+        /* --- ANIMATIONS --- */
+        .flash-green { animation: flashG 0.3s; }
+        .flash-red { animation: flashR 0.3s; }
+        @keyframes flashG { 50% { background-color: #dcedc8; } }
+        @keyframes flashR { 50% { background-color: #ffcdd2; } }
+
+        /* --- MOBILE MEDIA QUERY --- */
+        @media (max-width: 768px) {
+            h1 { font-size: 1.5rem; margin-bottom: 15px; }
+            
+            .screen { padding: 15px; }
+            
+            .settings-box { 
+                padding: 15px; 
+                margin-bottom: 5px;
+            }
+            
+            .instructions { 
+                font-size: 0.8rem; 
+                padding: 10px;
+                margin-top: 10px;
+            }
+
+            .premise { font-size: 1.1rem; margin: 5px 0; }
+            
+            /* Hide PC hints, show Mobile buttons */
+            .controls-hint { display: none; }
+            #mobile-controls { display: flex; }
+            
+            button.start-btn { width: 100%; max-width: none; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="screen active">
+        <h1>Spatial N-Back</h1>
+        
+        <div class="settings-box">
+            <div class="input-group">
+                <label for="mode-select">Mode</label>
+                <select id="mode-select">
+                    <option value="2D">2D (Standard)</option>
+                    <option value="3D">3D (Spatial)</option>
+                    <option value="4D">4D (Space-Time)</option>
+                </select>
+            </div>
+            <div class="input-group">
+                <label for="n-level">N-Level</label>
+                <input type="number" id="n-level" value="2" min="1" max="5" style="width: 60px; text-align:center;">
+            </div>
+            <div class="input-group">
+                <label for="premises">Premises</label>
+                <input type="number" id="premises" value="3" min="2" max="6" style="width: 60px; text-align:center;">
+            </div>
+        </div>
+
+        <button class="start-btn" onclick="startGame()">Start Exercise</button>
+
+        <div class="instructions">
+            <strong>How to play:</strong><br>
+            If the current shape matches the one from <strong>N</strong> steps ago, press <strong>MATCH</strong>.<br>
+            Otherwise, press <strong>NEXT</strong> (or wait).
+        </div>
+    </div>
+
+    <div id="game-screen" class="screen">
+        <div id="game-header">
+            <span id="trial-display">Trial: 1</span>
+            <span id="mode-display">2D</span>
+            <span id="n-display">N: 2</span>
+        </div>
+
+        <div id="progress-container">
+            <div id="progress-bar"></div>
+        </div>
+
+        <div id="stimuli-container">
+            </div>
+
+        <div class="controls-hint">
+            <span><span class="key-badge">SPACE</span> Match</span>
+            <span><span class="key-badge">P</span> Pass</span>
+            <span><span class="key-badge">ESC</span> Quit</span>
+        </div>
+
+        <div id="mobile-controls">
+            <button class="mob-btn btn-match" ontouchstart="handleTouchMatch(event)" onclick="handleSpaceInput()">MATCH</button>
+            <button class="mob-btn btn-pass" onclick="finishTrial()">NEXT</button>
+            <button class="mob-btn btn-quit" onclick="endGame()">EXIT</button>
+        </div>
+    </div>
+
+    <div id="end-screen" class="screen">
+        <h1>Session Report</h1>
+        <div class="settings-box">
+            <div class="stat-box" style="color: #2e7d32;"><span>Hits:</span> <span id="score-hits">0</span></div>
+            <div class="stat-box" style="color: #ef6c00;"><span>Misses:</span> <span id="score-misses">0</span></div>
+            <div class="stat-box" style="color: #c62828;"><span>False Alarms:</span> <span id="score-false">0</span></div>
+        </div>
+        <button class="start-btn" onclick="showStartScreen()">Main Menu</button>
+    </div>
+
+    <script>
+        // --- CONSTANTS ---
+        const LETTERS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+        
+        // --- STATE ---
+        let state = {
+            running: false,
+            mode: "2D",
+            nLevel: 2,
+            numPremises: 3,
+            history: [],
+            currentTrial: 0,
+            maxTrials: 0,
+            hits: 0,
+            misses: 0,
+            falseAlarms: 0,
+            userRespondedMatch: false,
+            timerStart: 0,
+            animationFrame: null
+        };
+
+        // --- VECTOR LOGIC ---
+        function getRandomVector(mode) {
+            let x=0, y=0, z=0, t=0;
+            while (x===0 && y===0 && z===0 && t===0) {
+                x = Math.floor(Math.random() * 3) - 1; 
+                y = Math.floor(Math.random() * 3) - 1;
+                if (mode === "3D" || mode === "4D") z = Math.floor(Math.random() * 3) - 1;
+                if (mode === "4D") t = Math.floor(Math.random() * 3) - 1;
+            }
+            return {x, y, z, t};
+        }
+
+        function vectorToText(v) {
+            let parts = [];
+            // 2D
+            if (v.y === 1) {
+                if(v.x === 0) parts.push("North");
+                else if(v.x === 1) parts.push("North-East");
+                else parts.push("North-West");
+            } else if (v.y === -1) {
+                if(v.x === 0) parts.push("South");
+                else if(v.x === 1) parts.push("South-East");
+                else parts.push("South-West");
+            } else {
+                if(v.x === 1) parts.push("East");
+                else if(v.x === -1) parts.push("West");
+            }
+            // 3D
+            if (v.z === 1) parts.push("Above");
+            if (v.z === -1) parts.push("Below");
+            // 4D
+            if (v.t === 1) parts.push("After");
+            if (v.t === -1) parts.push("Before");
+
+            if (parts.length === 0) return "Co-located";
+            if (parts.length === 1) return parts[0];
+            if (parts.length === 2) return parts.join(" and ");
+            return parts.slice(0, -1).join(", ") + ", and " + parts[parts.length - 1];
+        }
+
+        // --- MAP GENERATION ---
+        function generateMap(isMatchTarget, targetMapData) {
+            // MATCH LOGIC
+            if (isMatchTarget && targetMapData) {
+                let avail = shuffle([...LETTERS]);
+                let usedCharsInTarget = new Set();
+                targetMapData.rawPremises.forEach(p => {
+                    usedCharsInTarget.add(p.sub);
+                    usedCharsInTarget.add(p.obj);
+                });
+
+                let charMap = {};
+                usedCharsInTarget.forEach(oldChar => {
+                    charMap[oldChar] = avail.pop();
+                });
+
+                let newPremises = [];
+                let newRawPremises = [];
+
+                targetMapData.rawPremises.forEach(p => {
+                    let newSub = charMap[p.sub] || "?";
+                    let newObj = charMap[p.obj] || "?";
+                    let txt = vectorToText(p.vec);
+                    newPremises.push(`${newSub} is ${txt} of ${newObj}`);
+                    newRawPremises.push({ sub: newSub, obj: newObj, vec: p.vec });
+                });
+
+                return {
+                    signature: targetMapData.signature,
+                    premises: newPremises,
+                    rawPremises: newRawPremises
+                };
+            }
+
+            // RANDOM LOGIC
+            let attempts = 0;
+            while (attempts < 20) {
+                let avail = shuffle([...LETTERS]);
+                let used = [avail.pop()];
+                let nodes = {};
+                nodes[used[0]] = {x:0, y:0, z:0, t:0};
+                let occupied = new Set(["0,0,0,0"]);
+                let rawPremises = [];
+                let displayPremises = [];
+                let success = true;
+
+                for (let i=0; i<state.numPremises; i++) {
+                    let placed = false;
+                    let subAttempts = 0;
+                    while (!placed && subAttempts < 20) {
+                        subAttempts++;
+                        let sourceChar = used[Math.floor(Math.random() * used.length)];
+                        let sourcePos = nodes[sourceChar];
+                        let vec = getRandomVector(state.mode);
+
+                        let newX = sourcePos.x + vec.x;
+                        let newY = sourcePos.y + vec.y;
+                        let newZ = sourcePos.z + vec.z;
+                        let newT = sourcePos.t + vec.t;
+                        let key = `${newX},${newY},${newZ},${newT}`;
+
+                        if (!occupied.has(key)) {
+                            let newChar = avail.pop();
+                            nodes[newChar] = {x:newX, y:newY, z:newZ, t:newT};
+                            occupied.add(key);
+                            used.push(newChar);
+                            let dirText = vectorToText(vec);
+                            displayPremises.push(`${newChar} is ${dirText} of ${sourceChar}`);
+                            rawPremises.push({sub: newChar, obj: sourceChar, vec: vec});
+                            placed = true;
+                        }
+                    }
+                    if (!placed) { success = false; break; }
+                }
+
+                if (success) {
+                    return {
+                        signature: getSignature(nodes),
+                        premises: displayPremises,
+                        rawPremises: rawPremises
+                    };
+                }
+                attempts++;
+            }
+            return generateMap(false);
+        }
+
+        function getSignature(nodes) {
+            let arr = Object.values(nodes);
+            let minX = Math.min(...arr.map(n=>n.x));
+            let minY = Math.min(...arr.map(n=>n.y));
+            let minZ = Math.min(...arr.map(n=>n.z));
+            let minT = Math.min(...arr.map(n=>n.t));
+
+            let coords = arr.map(n => `${n.x-minX},${n.y-minY},${n.z-minZ},${n.t-minT}`);
+            coords.sort();
+            return coords.join("|");
+        }
+
+        function shuffle(array) {
+            let i = array.length, j;
+            while (i != 0) {
+                j = Math.floor(Math.random() * i);
+                i--;
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        }
+
+        // --- GAME LOOP ---
+        function startGame() {
+            state.mode = document.getElementById('mode-select').value;
+            state.nLevel = parseInt(document.getElementById('n-level').value);
+            state.numPremises = parseInt(document.getElementById('premises').value);
+            state.maxTrials = 30 + state.nLevel;
+            
+            state.history = [];
+            state.currentTrial = 0;
+            state.hits = 0; state.misses = 0; state.falseAlarms = 0;
+            state.running = true;
+
+            showScreen('game-screen');
+            runTrial();
+        }
+
+        function runTrial() {
+            if (!state.running) return;
+            if (state.currentTrial >= state.maxTrials) {
+                endGame();
+                return;
+            }
+
+            state.userRespondedMatch = false;
+            let makeMatch = false;
+            let targetMap = null;
+            
+            if (state.currentTrial >= state.nLevel) {
+                if (Math.random() < 0.35) {
+                    makeMatch = true;
+                    targetMap = state.history[state.currentTrial - state.nLevel];
+                }
+            }
+
+            let mapData;
+            if (makeMatch) {
+                mapData = generateMap(true, targetMap);
+            } else {
+                let attempts = 0;
+                while (attempts < 10) {
+                    mapData = generateMap(false);
+                    if (state.currentTrial >= state.nLevel) {
+                        let prevSig = state.history[state.currentTrial - state.nLevel].signature;
+                        if (mapData.signature !== prevSig) break;
+                    } else {
+                        break;
+                    }
+                    attempts++;
+                }
+            }
+
+            state.history.push(mapData);
+
+            // UI
+            document.getElementById('trial-display').innerText = `Trial: ${state.currentTrial + 1} / ${state.maxTrials}`;
+            document.getElementById('mode-display').innerText = state.mode;
+            document.getElementById('n-display').innerText = `N: ${state.nLevel}`;
+
+            const container = document.getElementById('stimuli-container');
+            container.innerHTML = "";
+            container.style.opacity = 0;
+            setTimeout(() => container.style.opacity = 1, 50);
+
+            mapData.premises.forEach(p => {
+                let div = document.createElement('div');
+                div.className = 'premise';
+                div.innerText = p;
+                container.appendChild(div);
+            });
+
+            // Timer
+            state.timerStart = performance.now();
+            if(state.animationFrame) cancelAnimationFrame(state.animationFrame);
+            state.animationFrame = requestAnimationFrame(updateTimer);
+        }
+
+        function updateTimer(timestamp) {
+            if(!state.running) return;
+            let elapsed = (timestamp - state.timerStart) / 1000;
+            let duration = 10;
+            let remaining = duration - elapsed;
+
+            if (remaining <= 0) {
+                finishTrial();
+            } else {
+                let pct = (remaining / duration) * 100;
+                document.getElementById('progress-bar').style.width = pct + "%";
+                state.animationFrame = requestAnimationFrame(updateTimer);
+            }
+        }
+
+        function finishTrial() {
+            if (state.currentTrial >= state.nLevel) {
+                let currentSig = state.history[state.currentTrial].signature;
+                let targetSig = state.history[state.currentTrial - state.nLevel].signature;
+                let isMatch = (currentSig === targetSig);
+
+                if (isMatch && !state.userRespondedMatch) {
+                    state.misses++;
+                    flashFeedback('red');
+                }
+            }
+            state.currentTrial++;
+            runTrial();
+        }
+
+        function handleSpaceInput() {
+            if (!state.running || state.userRespondedMatch) return;
+            state.userRespondedMatch = true;
+
+            let isMatch = false;
+            if (state.currentTrial >= state.nLevel) {
+                let currentSig = state.history[state.currentTrial].signature;
+                let targetSig = state.history[state.currentTrial - state.nLevel].signature;
+                if (currentSig === targetSig) isMatch = true;
+            }
+
+            if (isMatch) {
+                state.hits++;
+                flashFeedback('green');
+            } else {
+                state.falseAlarms++;
+                flashFeedback('red');
+            }
+        }
+        
+        function handleTouchMatch(e) {
+            e.preventDefault(); 
+            handleSpaceInput();
+        }
+
+        // --- UTILS ---
+        function flashFeedback(color) {
+            let body = document.body;
+            let cls = color === 'green' ? 'flash-green' : 'flash-red';
+            body.classList.remove('flash-green', 'flash-red');
+            void body.offsetWidth;
+            body.classList.add(cls);
+        }
+
+        function showScreen(id) {
+            document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+            document.getElementById(id).classList.add('active');
+        }
+
+        function endGame() {
+            state.running = false;
+            if(state.animationFrame) cancelAnimationFrame(state.animationFrame);
+            document.getElementById('score-hits').innerText = state.hits;
+            document.getElementById('score-misses').innerText = state.misses;
+            document.getElementById('score-false').innerText = state.falseAlarms;
+            showScreen('end-screen');
+        }
+
+        function showStartScreen() { showScreen('start-screen'); }
+
+        // --- LISTENERS ---
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') { e.preventDefault(); handleSpaceInput(); } 
+            else if (e.key.toLowerCase() === 'p') { if (state.running) finishTrial(); }
+            else if (e.code === 'Escape') { if (state.running) endGame(); }
+        });
+
+    </script>
+</body>
+</html>
